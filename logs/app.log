@@ -1,0 +1,7 @@
+2025-09-08 14:30:18.506 | DEBUG    | src.middleware.logging_middleware:_before_request:31 - HTTP request start: method=GET path=/ remote=127.0.0.1 ua=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 referrer=None
+2025-09-08 14:30:18.509 | INFO     | src.middleware.logging_middleware:_after_request:37 - HTTP request complete: method=GET path=/ status=404 duration_ms=2.66 content_length=None
+2025-09-08 14:30:18.898 | DEBUG    | src.middleware.logging_middleware:_before_request:31 - HTTP request start: method=GET path=/favicon.ico remote=127.0.0.1 ua=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 referrer=http://127.0.0.1:5000/
+2025-09-08 14:30:18.898 | DEBUG    | src.services.url_service:get_url_record:105 - get_url_record: no db_session provided for '%s'
+2025-09-08 14:30:18.898 | INFO     | src.middleware.logging_middleware:_after_request:37 - HTTP request complete: method=GET path=/favicon.ico status=404 duration_ms=0.00 content_length=None
+2025-09-08 14:34:57.867 | DEBUG    | src.middleware.logging_middleware:_before_request:31 - HTTP request start: method=GET path=/ remote=127.0.0.1 ua=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 referrer=None
+2025-09-08 14:34:57.871 | INFO     | src.middleware.logging_middleware:_after_request:37 - HTTP request complete: method=GET path=/ status=404 duration_ms=3.40 content_length=None

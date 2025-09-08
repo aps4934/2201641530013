@@ -1,0 +1,123 @@
+System Design Document - URL Shortener Microservice
+
+Overview
+Small single microservice responsible for creating short links, performing redirects, and returning per-link analytics. Emphasis on correctness, observability (mandatory custom logging middleware), and horizontal scalability. Authentication is out of scope.
+
+Key Decisions
+- Single microservice implemented with Python + Flask for clear routing and rapid development.
+- Relational DB as authoritative storage for shortcode uniqueness and analytics. SQLite for local dev; PostgreSQL recommended for production.
+- Click logs stored separately (click_logs table) to avoid bloating primary URL record and to enable efficient analytics.
+- Shortcode uniqueness enforced at DB level via unique index; generation retries on collision.
+- Mandatory custom logging middleware used across the app (no console/built-in logging).
+- Stateless HTTP handlers; DB session injected/configured per instance to enable horizontal scaling.
+
+APIs
+1) POST /shorturls
+- Input JSON: { "url": string (required), "validity": int minutes (optional), "shortcode": string (optional) }
+- Default validity: 30 minutes if omitted.
+- Validate URL (http/https). Custom shortcode validated (regex ^[A-Za-z0-9]{4,32}$).
+- If provided shortcode exists → 409 Conflict.
+- Auto-generate shortcode if not provided; ensure uniqueness with DB check and bounded retries.
+- Persist record. Response 201: { "shortLink": "https://host:port/<shortcode>", "expiry": "ISO8601 UTC" }
+- Errors: 400 (invalid input), 409 (collision), 500 (server).
+
+2) GET /<shortcode>
+- Lookup shortcode → 404 if not found.
+- If expired → 410 Gone.
+- Log click (timestamp, referrer, IP, optional geo); increment click_count atomically.
+- Redirect (302) to original URL.
+
+3) GET /shorturls/:shortcode
+- Return original URL, creation date, expiry date, total clicks and click logs (timestamp, referrer, geo).
+- 404 if not found.
+
+Data Model
+- urls
+  - id (PK)
+  - shortcode (varchar, unique, indexed)
+  - original_url (varchar(2048))
+  - created_at (datetime UTC)
+  - expiry (datetime UTC, nullable)
+  - click_count (integer, default 0)
+  - metadata/json (optional)
+- click_logs
+  - id (PK)
+  - url_id (FK -> urls.id)
+  - timestamp (datetime UTC)
+  - referrer (varchar, nullable)
+  - ip (varchar)
+  - geo (json or varchar, nullable)
+
+Design Notes
+- Unique index on urls.shortcode enforces global uniqueness.
+- Separate click_logs table supports retention, archival, and efficient aggregation.
+- Indexes: shortcode (urls), (url_id, timestamp) for click_logs.
+
+Shortcode Generation & Uniqueness
+- Use base62 charset (A-Z, a-z, 0-9).
+- Default length 6 (configurable).
+- On generation attempt an atomic insert/upsert or check+insert with transaction; retry up to N attempts.
+- Custom shortcode must match allowed charset/length and be checked against DB.
+
+Expiry & Validity
+- Validity input in minutes; default 30 minutes.
+- expiry = created_at + timedelta(minutes=validity).
+- Redirect checks expiry and returns 410 Gone when expired.
+
+Logging & Observability
+- Use provided logging middleware (Loguru or similar) for structured logs; no console prints.
+- Log incoming request start/end, HTTP status and latency, shortcode creation, collisions, redirects, errors and stack traces.
+- Recommend health endpoints and Prometheus metrics for operational visibility.
+
+Consistency & Atomicity
+- Use DB transactions for create and click logging (increment + insert) to avoid lost updates.
+- For high throughput, consider eventual-consistent counters (Redis) with reconciliation.
+
+Scaling & Performance
+- Cache popular shortcode->URL in Redis with TTL equal to remaining validity.
+- For click ingestion at scale, use an event queue (Kafka/RabbitMQ) and a worker to persist click logs and update counters.
+- Stateless app layers behind a load balancer; shared DB and optional cache/queue.
+
+Technology Choices & Justification
+- Python + Flask: minimal, well-known HTTP framework.
+- SQLAlchemy + Flask-Migrate: ORM and migrations.
+- PostgreSQL (prod): strong constraints and JSON support.
+- SQLite (dev): local testing.
+- Redis: caching and distributed counters.
+- Loguru/custom middleware: structured logging per evaluation requirement.
+- Docker: consistent deployment.
+
+Security & Privacy
+- No auth required for evaluation; production requires API keys/OAuth.
+- IPs/geo are PII — apply retention and anonymization policies.
+- Implement delete/TTL for GDPR compliance when needed.
+
+Error Handling & HTTP Semantics
+- 400 Bad Request — malformed input or invalid shortcode.
+- 409 Conflict — shortcode already exists.
+- 404 Not Found — shortcode missing.
+- 410 Gone — shortcode expired.
+- 500 Internal Server Error — unexpected failures.
+
+Operational Concerns
+- Schema migrations (Flask-Migrate / Alembic).
+- Health/readiness and liveness endpoints.
+- Logging retention and rotation configured in middleware.
+- Backups for DB and archived click logs.
+
+Assumptions
+- Validity always provided as integer minutes when present; default 30 minutes otherwise.
+- Shortcodes are alphanumeric only.
+- Geo resolution performed externally (not implemented).
+- Single-tenant service with globally unique shortcodes.
+- Pre-authorized environment; no authentication implemented for evaluation.
+
+Testing Strategy
+- Unit tests: shortcode generation, URL validation, expiry logic, DB operations.
+- Integration tests: in-memory or SQLite DB for create→redirect→stats flow.
+- Load testing: redirect path and click ingestion throughput.
+
+Next Steps / Deliverables
+- Final code: Flask app, SQLAlchemy models, services, logging middleware, migrations.
+- Dockerfile and docker-compose (Postgres + Redis) for staging.
+- Optional: async click ingestion worker and
